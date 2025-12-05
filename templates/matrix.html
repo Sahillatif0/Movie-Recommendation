@@ -1,0 +1,69 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Adjacency Matrix</title>
+  <link rel="stylesheet" href="/static/css/style.css" />
+  <script defer src="/static/js/script.js"></script>
+</head>
+<body>
+  <nav class="navbar">
+    <div class="logo">Graph-Based Recs</div>
+    <div class="nav-links">
+      <a href="/">Home</a>
+      <a href="/graph">Graph</a>
+      <a class="active" href="/matrix">Matrix</a>
+      <a href="/recommend">Recommend</a>
+    </div>
+  </nav>
+
+  <div class="page-wrapper">
+    <header class="section-header">
+      <div>
+        <p class="eyebrow">Matrix</p>
+        <h2>Adjacency Matrix & Heatmap</h2>
+        <p>Ratings of randomly sampled users across their rated movies.</p>
+      </div>
+      <div class="cta-group">
+        <a class="btn secondary" href="/graph">View Graph</a>
+        <a class="btn primary" href="/matrix?download=1">Download CSV</a>
+      </div>
+    </header>
+
+    <div class="grid-two">
+      <div class="card scrollable">
+        <h3>Adjacency Matrix</h3>
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>User \ Movie</th>
+                {% for h in headers %}
+                <th>{{ h }}</th>
+                {% endfor %}
+              </tr>
+            </thead>
+            <tbody>
+              {% for uid, row in rows %}
+              <tr>
+                <td class="row-header">{{ uid }}</td>
+                {% for val in row %}
+                <td>{{ val }}</td>
+                {% endfor %}
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Heatmap</h3>
+        <div class="heatmap">
+          <img src="{{ heatmap_url }}" alt="Matrix Heatmap" />
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

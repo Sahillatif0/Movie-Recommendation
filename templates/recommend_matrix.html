@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Recommendation Matrix</title>
+  <link rel="stylesheet" href="/static/css/style.css" />
+  <script defer src="/static/js/script.js"></script>
+</head>
+<body>
+  <nav class="navbar">
+    <div class="logo">Graph-Based Recs</div>
+    <div class="nav-links">
+      <a href="/">Home</a>
+      <a href="/graph">Graph</a>
+      <a href="/matrix">Matrix</a>
+      <a class="active" href="/recommend">Recommend</a>
+    </div>
+  </nav>
+
+  <div class="page-wrapper">
+    <header class="section-header">
+      <div>
+        <p class="eyebrow">Recommendation Matrix</p>
+        <h2>User {{ user_id }} — Top {{ top_n }}</h2>
+        <p class="muted">Algorithm: {{ algorithm }}</p>
+      </div>
+      <div class="cta-group">
+        <a class="btn secondary" href="/recommend">Back to recommendations</a>
+        <a class="btn tertiary" href="/graph?mode=recommendations&user_id={{ user_id }}&algorithm=cosine&top={{ top_n }}">View recommendation graph</a>
+        <a class="btn secondary" href="/recommend/matrix?user_id={{ user_id }}&algorithm=cosine&top={{ top_n }}&download=1">Download CSV</a>
+      </div>
+    </header>
+
+    {% if headers %}
+    <div class="card scrollable">
+      <h3>Adjacency Matrix (predicted scores)</h3>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>User \ Movie</th>
+              {% for h in headers %}
+              <th>{{ h }}</th>
+              {% endfor %}
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="row-header">User {{ user_id }}</td>
+              {% for val in scores %}
+              <td>{{ val }}</td>
+              {% endfor %}
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% else %}
+    <div class="card">
+      <p>No recommendations available for this user.</p>
+    </div>
+    {% endif %}
+  </div>
+</body>
+</html>

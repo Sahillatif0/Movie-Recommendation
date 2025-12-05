@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Graph Adjacency Matrix</title>
+  <link rel="stylesheet" href="/static/css/style.css" />
+  <script defer src="/static/js/script.js"></script>
+</head>
+<body>
+  <nav class="navbar">
+    <div class="logo">Graph-Based Recs</div>
+    <div class="nav-links">
+      <a href="/">Home</a>
+      <a class="active" href="/graph">Graph</a>
+      <a href="/matrix">Matrix</a>
+      <a href="/recommend">Recommend</a>
+    </div>
+  </nav>
+
+  <div class="page-wrapper">
+    <header class="section-header">
+      <div>
+        <p class="eyebrow">Graph Adjacency</p>
+        <h2>{{ subtitle }}</h2>
+      </div>
+      <div class="cta-group">
+        <a class="btn secondary" href="/graph?{{ request.query_string.decode('utf-8') }}">Back to graph</a>
+        {% if mode == "recommendations" %}
+        <a class="btn tertiary" href="/recommend">Back to recommendations</a>
+        {% endif %}
+      </div>
+    </header>
+
+    {% if headers %}
+    <div class="card scrollable">
+      <h3>Adjacency Matrix</h3>
+      <p class="muted">Values are binary edges (1 = edge exists, 0 = no edge).</p>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>User \ Movie</th>
+              {% for h in headers %}
+              <th>{{ h }}</th>
+              {% endfor %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for label, vals in rows %}
+            <tr>
+              <td class="row-header">{{ label }}</td>
+              {% for v in vals %}
+              <td>{{ v }}</td>
+              {% endfor %}
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% else %}
+    <div class="card">
+      <p>No data available for this graph.</p>
+    </div>
+    {% endif %}
+  </div>
+</body>
+</html>

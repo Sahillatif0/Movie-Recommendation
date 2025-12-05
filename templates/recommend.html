@@ -1,0 +1,79 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Movie Recommendations</title>
+  <link rel="stylesheet" href="/static/css/style.css" />
+  <script defer src="/static/js/script.js"></script>
+</head>
+<body>
+  <nav class="navbar">
+    <div class="logo">Graph-Based Recs</div>
+    <div class="nav-links">
+      <a href="/">Home</a>
+      <a href="/graph">Graph</a>
+      <a href="/matrix">Matrix</a>
+      <a class="active" href="/recommend">Recommend</a>
+    </div>
+  </nav>
+
+  <div class="page-wrapper">
+    <header class="section-header">
+      <div>
+        <p class="eyebrow">Link Prediction</p>
+        <h2>Get Recommendations</h2>
+        <p>Select a user and algorithm to fetch top movie suggestions from the sampled graph.</p>
+      </div>
+    </header>
+
+    <form class="form" method="POST">
+      <div class="form-group">
+        <label for="user">User</label>
+        <select id="user" name="user_id" required>
+          <option value="" disabled selected>Select user</option>
+          {% for uid in users %}
+          <option value="{{ uid }}" {% if selected_user == uid %}selected{% endif %}>User {{ uid }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="algo">Algorithm</label>
+        <select id="algo" name="algorithm" required>
+          {% for key, name in algorithms.items() %}
+          <option value="{{ key }}" {% if selected_algo == key %}selected{% endif %}>{{ name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <button class="btn primary" type="submit">Get Recommendations</button>
+    </form>
+
+    {% if results %}
+    <div class="results-grid">
+      {% for rec in results %}
+      <div class="card recommendation">
+        <p class="label">Score</p>
+        <p class="score">{{ rec.score }}</p>
+        <h4>{{ rec.title }}</h4>
+      </div>
+      {% endfor %}
+    </div>
+    <div class="cta-group" style="margin-top: 1.5rem;">
+      <a class="btn secondary"
+         href="/graph?mode=recommendations&user_id={{ selected_user }}&algorithm={{ selected_algo }}&top={{ top_n }}">
+        View graph for these recommendations
+      </a>
+      <a class="btn primary"
+         href="/recommend/matrix?user_id={{ selected_user }}&algorithm={{ selected_algo }}&top={{ top_n }}">
+        Adjacency matrix of recommendation scores
+      </a>
+      <a class="btn tertiary" href="/graph">View full sample graph</a>
+    </div>
+    {% elif selected_user %}
+    <div class="card">
+      <p>No recommendations found for this user/algorithm.</p>
+    </div>
+    {% endif %}
+  </div>
+</body>
+</html>
