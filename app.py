@@ -9,6 +9,7 @@ from flask import (
     redirect,
     url_for,
     session,
+    jsonify,
 )
 
 from data_loader import load_data
@@ -19,6 +20,26 @@ BASE_DIR = Path(__file__).resolve().parent
 GRAPH_HTML = BASE_DIR / "templates" / "graph.html"
 HEATMAP_PATH = BASE_DIR / "static" / "images" / "heatmap.png"
 
+NETWORK_DIV_ESCAPED = '<div id=\"mynetwork\" class=\"card-body\"></div>'
+NETWORK_DIV_PLAIN = '<div id="mynetwork" class="card-body"></div>'
+LOADER_MARKUP_ESCAPED = f"""{NETWORK_DIV_ESCAPED}
+                        <div id=\"loadingBar\">
+                            <div class=\"loader-aurora\"></div>
+                            <div class=\"graph-loader-panel\">
+                                <p class=\"loader-kicker\">Building graph sample</p>
+                                <h3 id=\"loader-stage\">Initializing layout</h3>
+                                <p class=\"loader-hint\">We stabilize the network so clusters stay readable once it renders.</p>
+                                <div class=\"loader-progress\">
+                                    <div id=\"bar\"></div>
+                                </div>
+                                <div class=\"loader-meta\">
+                                    <span id=\"text\">0%</span>
+                                    <span id=\"loader-tip\">Hang tight, this only takes a moment.</span>
+                                </div>
+                            </div>
+                        </div>"""
+LOADER_MARKUP_PLAIN = LOADER_MARKUP_ESCAPED.replace('\\"', '"')
+
 app = Flask(__name__)
 app.secret_key = "dev-secret"
 
@@ -26,7 +47,7 @@ ratings_df, movies_df, merged_df = load_data()
 recommender = GraphRecommender(ratings_df, movies_df, sample_size=20)
 
 
-def _patch_graph_html(path: Path, lock_sample: bool):
+def _patch_graph_html(path: Path, lock_sample: bool, show_loader: bool = True):
     if not path.exists():
         return
     html = path.read_text(encoding="utf-8")
@@ -88,11 +109,24 @@ def _patch_graph_html(path: Path, lock_sample: bool):
     )
     html = html.replace("<body>", f"<body>{nav}")
     html = html.replace("</body>", f"{script_loader}</div></body>")
-    html = _modernize_loader_html(html)
+    html = _modernize_loader_html(html, show_loader=show_loader)
     path.write_text(html, encoding="utf-8")
 
 
-def _modernize_loader_html(html: str) -> str:
+def _strip_loader_overlay(html: str) -> str:
+    for markup, replacement in (
+        (LOADER_MARKUP_ESCAPED, NETWORK_DIV_ESCAPED),
+        (LOADER_MARKUP_PLAIN, NETWORK_DIV_PLAIN),
+    ):
+        if markup in html:
+            return html.replace(markup, replacement, 1)
+    return html
+
+
+def _modernize_loader_html(html: str, show_loader: bool = True) -> str:
+    if not show_loader:
+        return _strip_loader_overlay(html)
+
     if "graph-loader-panel" in html:
         return html
 
@@ -224,24 +258,13 @@ def _modernize_loader_html(html: str) -> str:
 
     html = html.replace('<div class="card" style="width: 100%">', '<div class="card graph-card" style="width: 100%">', 1)
 
-    loader_markup = """<div id=\"mynetwork\" class=\"card-body\"></div>
-            <div id=\"loadingBar\">
-              <div class=\"loader-aurora\"></div>
-              <div class=\"graph-loader-panel\">
-                <p class=\"loader-kicker\">Building graph sample</p>
-                <h3 id=\"loader-stage\">Initializing layout</h3>
-                <p class=\"loader-hint\">We stabilize the network so clusters stay readable once it renders.</p>
-                <div class=\"loader-progress\">
-                  <div id=\"bar\"></div>
-                </div>
-                <div class=\"loader-meta\">
-                  <span id=\"text\">0%</span>
-                  <span id=\"loader-tip\">Hang tight, this only takes a moment.</span>
-                </div>
-              </div>
-            </div>"""
-
-    html = html.replace('<div id="mynetwork" class="card-body"></div>', loader_markup, 1)
+    for target, replacement in (
+        (NETWORK_DIV_ESCAPED, LOADER_MARKUP_ESCAPED),
+        (NETWORK_DIV_PLAIN, LOADER_MARKUP_PLAIN),
+    ):
+        if target in html:
+            html = html.replace(target, replacement, 1)
+            break
 
     script_pattern = re.compile(
         r"\n\s+network\.on\(\"stabilizationProgress\"[\s\S]*?network\.once\(\"stabilizationIterationsDone\"[\s\S]*?\}\);\s*",
@@ -278,6 +301,16 @@ def _modernize_loader_html(html: str) -> str:
                           loaderTip.textContent = lastStage.tip;
                       }
 
+                      function hideLoaderCompletely() {
+                          if (!loader) {
+                              return;
+                          }
+                          loader.style.opacity = 0;
+                          setTimeout(function () {
+                              loader.style.display = 'none';
+                          }, 500);
+                      }
+
                       network.on("stabilizationProgress", function(params) {
                           if (loader) {
                               loader.removeAttribute("style");
@@ -300,17 +333,79 @@ def _modernize_loader_html(html: str) -> str:
                               loaderBar.style.width = '100%';
                           }
                           updateLoaderStage(1);
-                          if (loader) {
-                              loader.style.opacity = 0;
-                              // really clean the dom element
-                              setTimeout(function () {loader.style.display = 'none';}, 500);
-                          }
+                          hideLoaderCompletely();
                       });
+
+                      setTimeout(function () {
+                          if (!loader || loader.style.display === 'none') {
+                              return;
+                          }
+                          if (loaderText) {
+                              loaderText.innerHTML = '100%';
+                          }
+                          if (loaderBar) {
+                              loaderBar.style.width = '100%';
+                          }
+                          updateLoaderStage(1);
+                          hideLoaderCompletely();
+                      }, 6000);
                   
     """
 
     html = script_pattern.sub(new_script, html, count=1)
     return html
+
+
+def _normalize_for_blend(entries):
+    normalized = {}
+    for item in entries:
+        movie_id = item["movie_id"]
+        normalized[movie_id] = {
+            "title": item["title"],
+            "score": min(max(item["score"] / 5.0, 0.0), 1.0),
+        }
+    return normalized
+
+
+def _blend_algorithm_scores(selected_algorithms, algo_results, blend_weight, top_n):
+    if len(selected_algorithms) < 2:
+        return []
+
+    normalized_weight = max(0, min(int(blend_weight or 0), 100)) / 100.0
+    primary_share = 1.0 - normalized_weight
+    secondary_algorithms = selected_algorithms[1:]
+    if not secondary_algorithms:
+        return []
+
+    secondary_share = normalized_weight
+    secondary_per_algo = secondary_share / len(secondary_algorithms) if secondary_algorithms else 0.0
+
+    combined = {}
+
+    def accumulate(algo_key, weight):
+        normalized = _normalize_for_blend(algo_results.get(algo_key, []))
+        for movie_id, payload in normalized.items():
+            bucket = combined.setdefault(
+                movie_id,
+                {"movie_id": movie_id, "title": payload["title"], "score": 0.0},
+            )
+            bucket["score"] += payload["score"] * weight
+
+    accumulate(selected_algorithms[0], primary_share)
+    for algo in secondary_algorithms:
+        accumulate(algo, secondary_per_algo)
+
+    ranked = sorted(combined.values(), key=lambda x: x["score"], reverse=True)
+    blended = []
+    for entry in ranked[:top_n]:
+        blended.append(
+            {
+                "movie_id": entry["movie_id"],
+                "title": entry["title"],
+                "score": round(entry["score"] * 5.0, 3),
+            }
+        )
+    return blended
 
 
 @app.route("/")
@@ -351,7 +446,8 @@ def graph():
         )
     else:
         recommender.export_pyvis(GRAPH_HTML)
-    _patch_graph_html(GRAPH_HTML, lock_sample=lock_sample)
+    show_loader = mode != "recommendations"
+    _patch_graph_html(GRAPH_HTML, lock_sample=lock_sample, show_loader=show_loader)
     return render_template("graph.html")
 
 
@@ -379,26 +475,78 @@ def matrix():
 
 @app.route("/recommend", methods=["GET", "POST"])
 def recommend():
-    results = []
+    algo_results = {}
+    blended_results = []
     selected_user = None
-    selected_algo = None
+    selected_algorithms = []
+    blend_weight = 35
+    blend_enabled = False
+    top_n = 16
 
     if request.method == "POST":
-        selected_user = int(request.form.get("user_id"))
-        selected_algo = request.form.get("algorithm", "cosine")
-        recommendations = recommender.recommend(selected_user, selected_algo, top_n=20)
-        results = [
-            {"title": title, "score": round(score, 4)} for title, score in recommendations
-        ]
+        user_id = request.form.get("user_id")
+        if user_id:
+            selected_user = int(user_id)
+        selected_algorithms = request.form.getlist("algorithms") or [request.form.get("algorithm", "cosine")]
+        selected_algorithms = [algo for algo in selected_algorithms if algo]
+        if not selected_algorithms:
+            selected_algorithms = ["cosine"]
+        selected_algorithms = selected_algorithms[:4]
+
+        top_n_value = request.form.get("top_n")
+        if top_n_value:
+            try:
+                top_n = int(top_n_value)
+            except ValueError:
+                top_n = 16
+        top_n = max(4, min(top_n, 40))
+
+        blend_weight = int(request.form.get("blend_weight", blend_weight))
+        blend_enabled = request.form.get("blend_enabled") == "1"
+
+        if selected_user is not None:
+            for algo in selected_algorithms:
+                recommendations = recommender.recommend_with_ids(selected_user, algorithm=algo, top_n=top_n)
+                algo_results[algo] = [
+                    {
+                        "movie_id": movie_id,
+                        "title": title,
+                        "score": round(score, 4),
+                    }
+                    for movie_id, title, score in recommendations
+                ]
+
+            if blend_enabled and len(selected_algorithms) >= 2:
+                blended_results = _blend_algorithm_scores(
+                    selected_algorithms, algo_results, blend_weight, top_n
+                )
+
+    if not selected_algorithms:
+        selected_algorithms = ["cosine"]
+
+    primary_algorithm = selected_algorithms[0]
+    secondary_algorithms = selected_algorithms[1:]
+    normalized_weight = max(0, min(blend_weight, 100))
+    blend_summary = {
+        "primary_key": primary_algorithm,
+        "primary_label": ALGORITHM_NAMES.get(primary_algorithm, primary_algorithm),
+        "secondary_keys": secondary_algorithms,
+        "primary_share": 100 - normalized_weight,
+        "secondary_share": normalized_weight,
+    }
 
     return render_template(
         "recommend.html",
         users=recommender.selected_users,
         algorithms=ALGORITHM_NAMES,
-        results=results,
+        algo_results=algo_results,
+        blended_results=blended_results,
+        blend_enabled=blend_enabled,
+        blend_weight=blend_weight,
+        blend_summary=blend_summary,
+        selected_algorithms=selected_algorithms,
         selected_user=selected_user,
-        selected_algo=selected_algo,
-        top_n=len(results) or 20,
+        top_n=top_n,
     )
 
 
@@ -461,6 +609,14 @@ def graph_adjacency():
         rows=rows,
         subtitle=subtitle,
     )
+
+
+@app.route("/api/node/<node_id>")
+def node_metadata(node_id: str):
+    profile = recommender.node_profile(node_id)
+    if not profile:
+        return jsonify({"error": "Node not found"}), 404
+    return jsonify(profile)
 
 
 if __name__ == "__main__":

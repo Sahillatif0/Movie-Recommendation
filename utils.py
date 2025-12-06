@@ -6,6 +6,8 @@ ALGORITHM_NAMES = {
     "jaccard": "Jaccard Coefficient",
     "adamic": "Adamic/Adar Index",
     "resource": "Resource Allocation Index",
+    "preferential": "Preferential Attachment",
+    "pagerank": "Personalized PageRank",
 }
 
 

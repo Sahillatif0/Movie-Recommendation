@@ -141,6 +141,10 @@ class GraphRecommender:
         algorithm = (algorithm or "cosine").lower()
         if algorithm in {"jaccard", "adamic", "resource"}:
             return self._recommend_similarity_sets(user_id, algorithm, top_n)
+        if algorithm == "preferential":
+            return self._recommend_preferential_attachment(user_id, top_n)
+        if algorithm == "pagerank":
+            return self._recommend_personalized_pagerank(user_id, top_n)
         return self._recommend_collaborative(user_id, top_n)
 
     def _recommend_collaborative(
@@ -254,6 +258,96 @@ class GraphRecommender:
             normalized.append((movie_id, title, float(capped)))
         return normalized
 
+    def _recommend_preferential_attachment(
+        self, user_id: int, top_n: int
+    ) -> List[Tuple[int, str, float]]:
+        if user_id not in self.matrix.index:
+            return []
+
+        user_ratings = self.matrix.loc[user_id]
+        rated = user_ratings[user_ratings > 0]
+        if rated.empty:
+            return []
+
+        candidates = user_ratings[user_ratings == 0].index
+        if not len(candidates):
+            return []
+
+        binary_matrix = (self.matrix > 0).astype(int)
+        user_degree = int(binary_matrix.loc[user_id].sum())
+        watchers_cache = {}
+
+        def watchers(movie_id):
+            movie_id = int(movie_id)
+            if movie_id not in watchers_cache:
+                col = binary_matrix[movie_id]
+                watchers_cache[movie_id] = set(col[col > 0].index)
+            return watchers_cache[movie_id]
+
+        scored = []
+        for movie_id in candidates:
+            candidate_watchers = watchers(movie_id)
+            movie_degree = len(candidate_watchers)
+            if movie_degree == 0:
+                continue
+
+            overlap_mass = 0
+            for seen_id in rated.index:
+                overlap_mass += len(candidate_watchers & watchers(seen_id))
+
+            if overlap_mass == 0:
+                continue
+
+            score = float(user_degree + 1) * float(movie_degree + 1) * math.log(1 + overlap_mass)
+            scored.append((int(movie_id), self._movie_title(int(movie_id)), score))
+
+        scored.sort(key=lambda x: x[2], reverse=True)
+        if not scored:
+            return []
+
+        max_score = max(item[2] for item in scored)
+        scale = 5.0 / max_score if max_score else 1.0
+        normalized = []
+        for movie_id, title, score in scored[:top_n]:
+            normalized.append((movie_id, title, float(min(score * scale, 5.0))))
+        return normalized
+
+    def _recommend_personalized_pagerank(
+        self, user_id: int, top_n: int
+    ) -> List[Tuple[int, str, float]]:
+        user_node = _user_node(user_id)
+        if user_node not in self.graph or user_id not in self.matrix.index:
+            return []
+
+        personalization = {node: 0.0 for node in self.graph.nodes}
+        personalization[user_node] = 1.0
+
+        try:
+            scores = nx.pagerank(self.graph, alpha=0.85, personalization=personalization, max_iter=200)
+        except nx.NetworkXError:
+            return []
+
+        user_ratings = self.matrix.loc[user_id]
+        candidates = [movie_id for movie_id in user_ratings.index if user_ratings[movie_id] == 0]
+        scored = []
+        for movie_id in candidates:
+            node_id = _movie_node(int(movie_id))
+            score = scores.get(node_id, 0.0)
+            if score <= 0:
+                continue
+            scored.append((int(movie_id), self._movie_title(int(movie_id)), float(score)))
+
+        scored.sort(key=lambda x: x[2], reverse=True)
+        if not scored:
+            return []
+
+        max_score = max(item[2] for item in scored)
+        scale = 5.0 / max_score if max_score else 1.0
+        normalized = []
+        for movie_id, title, score in scored[:top_n]:
+            normalized.append((movie_id, title, float(min(score * scale, 5.0))))
+        return normalized
+
     @staticmethod
     def _cosine_similarity(vec_a, vec_b) -> float:
         denom = np.linalg.norm(vec_a) * np.linalg.norm(vec_b)
@@ -327,3 +421,110 @@ class GraphRecommender:
         if not match.empty:
             return match.iloc[0].title
         return f"Movie {movie_id}"
+
+    def node_profile(self, node_id: str) -> dict:
+        if not node_id or self.matrix is None:
+            return {}
+        node_id = node_id.strip()
+        if node_id.startswith(USER_PREFIX):
+            try:
+                return self._user_node_profile(int(node_id.lstrip(USER_PREFIX)))
+            except ValueError:
+                return {}
+        if node_id.startswith(MOVIE_PREFIX):
+            try:
+                return self._movie_node_profile(int(node_id.lstrip(MOVIE_PREFIX)))
+            except ValueError:
+                return {}
+        return {}
+
+    def _user_node_profile(self, user_id: int) -> dict:
+        if user_id not in self.matrix.index:
+            return {}
+
+        row = self.matrix.loc[user_id]
+        favorites = row[row > 0].sort_values(ascending=False)
+        top_movies = [
+            {
+                "movie_id": int(mid),
+                "title": self._movie_title(int(mid)),
+                "rating": float(score),
+            }
+            for mid, score in favorites.head(5).items()
+        ]
+        avg_rating = float(favorites.mean()) if not favorites.empty else 0.0
+
+        binary_matrix = (self.matrix > 0).astype(bool)
+        user_watchlist = set(binary_matrix.loc[user_id][binary_matrix.loc[user_id]].index)
+
+        similar_users = []
+        for other_id in self.matrix.index:
+            if other_id == user_id:
+                continue
+            other_watchlist = set(binary_matrix.loc[other_id][binary_matrix.loc[other_id]].index)
+            shared = user_watchlist & other_watchlist
+            if not shared:
+                continue
+            shared_titles = [self._movie_title(int(mid)) for mid in sorted(shared)[:3]]
+            similar_users.append(
+                {
+                    "user_id": int(other_id),
+                    "overlap": len(shared),
+                    "shared_titles": shared_titles,
+                }
+            )
+
+        similar_users.sort(key=lambda item: item["overlap"], reverse=True)
+        similar_users = similar_users[:4]
+
+        return {
+            "type": "user",
+            "id": int(user_id),
+            "degree": len(user_watchlist),
+            "avg_rating": avg_rating,
+            "top_movies": top_movies,
+            "similar_users": similar_users,
+        }
+
+    def _movie_node_profile(self, movie_id: int) -> dict:
+        if movie_id not in self.matrix.columns:
+            return {}
+
+        column = self.matrix[movie_id]
+        watchers = column[column > 0].sort_values(ascending=False)
+        watchers_payload = [
+            {"user_id": int(uid), "rating": float(rating)} for uid, rating in watchers.head(6).items()
+        ]
+        avg_rating = float(watchers.mean()) if not watchers.empty else 0.0
+
+        binary_matrix = (self.matrix > 0).astype(bool)
+        movie_watchers = set(binary_matrix[movie_id][binary_matrix[movie_id]].index)
+
+        related = []
+        for other_movie in self.matrix.columns:
+            if other_movie == movie_id:
+                continue
+            other_watchers = set(binary_matrix[other_movie][binary_matrix[other_movie]].index)
+            overlap = len(movie_watchers & other_watchers)
+            if overlap == 0:
+                continue
+            related.append(
+                {
+                    "movie_id": int(other_movie),
+                    "title": self._movie_title(int(other_movie)),
+                    "overlap": overlap,
+                }
+            )
+
+        related.sort(key=lambda item: item["overlap"], reverse=True)
+        related = related[:5]
+
+        return {
+            "type": "movie",
+            "id": int(movie_id),
+            "title": self._movie_title(int(movie_id)),
+            "degree": len(movie_watchers),
+            "avg_rating": avg_rating,
+            "watchers": watchers_payload,
+            "related_movies": related,
+        }

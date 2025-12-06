@@ -29,6 +29,108 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+.node-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(3,3,15,0.85);
+    backdrop-filter: blur(16px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 60;
+    padding: 20px;
+  }
+  .node-modal.is-visible {
+    display: flex;
+  }
+  .node-modal-panel {
+    position: relative;
+    width: min(420px, 90vw);
+    border-radius: 24px;
+    padding: 24px;
+    background: rgba(6,8,24,0.95);
+    border: 1px solid rgba(255,255,255,0.08);
+    box-shadow: 0 30px 60px rgba(0,0,0,0.55);
+  }
+  .node-modal-close {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font-size: 1.5rem;
+    cursor: pointer;
+  }
+  .node-modal-body h3 {
+    margin: 0 0 4px;
+  }
+  .node-subtitle {
+    margin: 0 0 12px;
+    color: var(--muted);
+  }
+  .node-pill {
+    display: inline-flex;
+    padding: 6px 12px;
+    border-radius: 999px;
+    border: 1px solid rgba(255,255,255,0.1);
+    font-size: 0.75rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 14px;
+  }
+  .node-stat-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+    margin: 14px 0 18px;
+  }
+  .node-stat-grid span {
+    font-size: 1.6rem;
+    font-weight: 600;
+  }
+  .node-stat-grid p {
+    margin: 4px 0 0;
+    font-size: 0.8rem;
+    color: var(--muted);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .node-section-label {
+    margin: 0 0 6px;
+    font-size: 0.85rem;
+    color: var(--muted);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .node-modal-list {
+    list-style: none;
+    margin: 0 0 16px;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .node-modal-list li {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.9rem;
+    padding: 10px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+  }
+  .node-modal-list li strong {
+    color: var(--text);
+  }
+  .node-modal-list li span {
+    color: var(--muted);
+  }
+  .node-loading,
+  .node-error {
+    margin: 0;
+    color: var(--muted);
+  }
+
 ::selection {
   background: var(--accent-2);
   color: #05050f;
@@ -207,6 +309,9 @@ a { color: inherit; text-decoration: none; }
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
   margin: 24px 0;
 }
+.compare-form {
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
 .form label { font-weight: 600; color: var(--muted); }
 .form select {
   padding: 12px;
@@ -234,7 +339,268 @@ select option:checked {
   box-shadow: 0 0 0 3px rgba(54,241,205,0.25);
   background: rgba(54,241,205,0.12);
 }
-.form select:
+
+.field-note {
+  margin: 8px 0 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.algorithm-group {
+  grid-column: 1 / -1;
+}
+
+.algo-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.algo-card {
+  position: relative;
+  display: block;
+  cursor: pointer;
+}
+
+.algo-card input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+  z-index: 2;
+}
+
+.algo-card-shell {
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(4,6,20,0.85);
+  box-shadow: 0 18px 30px rgba(0,0,0,0.35);
+  transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+  overflow: hidden;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 150px;
+}
+
+.algo-card:hover .algo-card-shell {
+  transform: translateY(-3px);
+  border-color: rgba(54,241,205,0.4);
+  box-shadow: 0 28px 45px rgba(0,0,0,0.45);
+}
+
+.algo-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.algo-tag {
+  font-size: 0.7rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--accent-2);
+}
+
+.algo-check {
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.9rem;
+  color: rgba(255,255,255,0.6);
+}
+
+.algo-card h4 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.algo-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.algo-card-shell::after {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  border: 1px solid transparent;
+  pointer-events: none;
+  transition: border-color 0.2s ease;
+}
+
+.algo-card.is-selected .algo-card-shell,
+.algo-card input:checked + .algo-card-shell {
+  border-color: rgba(54,241,205,0.45);
+}
+
+.algo-card.is-selected .algo-check,
+.algo-card input:checked + .algo-card-shell .algo-check {
+  background: linear-gradient(120deg, var(--accent-2), var(--accent));
+  color: #05050f;
+  border-color: transparent;
+}
+
+.algo-card.is-selected .algo-card-shell::after,
+.algo-card input:checked + .algo-card-shell::after {
+  border-color: rgba(255,255,255,0.08);
+}
+
+.blend-group {
+  grid-column: 1 / -1;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 18px;
+  padding: 18px;
+  background: rgba(255,255,255,0.03);
+}
+.blend-group input[type="range"] {
+  width: 100%;
+  margin: 12px 0;
+}
+.blend-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.toggle input {
+  width: 18px;
+  height: 18px;
+}
+.blend-values {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.compare-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 18px;
+  margin-top: 12px;
+}
+
+.algo-column {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px;
+  border-radius: 20px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.03);
+}
+.algo-column-head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.algo-name {
+  margin: 0;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 0.85rem;
+  color: var(--accent-2);
+}
+.algo-meta {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.algo-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 460px;
+  overflow-y: auto;
+  padding-right: 10px;
+  position: relative;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(54,241,205,0.4) rgba(255,255,255,0.05);
+  scroll-behavior: smooth;
+}
+.algo-cards::-webkit-scrollbar {
+  width: 6px;
+}
+.algo-cards::-webkit-scrollbar-track {
+  background: rgba(255,255,255,0.04);
+  border-radius: 999px;
+}
+.algo-cards::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: linear-gradient(180deg, var(--accent-2), var(--accent));
+  box-shadow: 0 0 10px rgba(0,0,0,0.25);
+}
+.algo-cards::before,
+.algo-cards::after {
+  content: "";
+  position: sticky;
+  left: 0;
+  right: 0;
+  height: 22px;
+  pointer-events: none;
+  z-index: 1;
+}
+.algo-cards::before {
+  top: 0;
+  background: linear-gradient(180deg, rgba(3,3,15,0.85), rgba(3,3,15,0));
+}
+.algo-cards::after {
+  bottom: 0;
+  background: linear-gradient(0deg, rgba(3,3,15,0.85), rgba(3,3,15,0));
+}
+.recommendation.compact {
+  padding: 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(4,6,20,0.65);
+}
+.recommendation.compact .rec-score {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.recommendation.compact .score {
+  font-size: 1.4rem;
+}
+.recommendation.compact h4 {
+  margin: 8px 0 0;
+  font-size: 1rem;
+}
+.matrix-links {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.blend-column {
+  border-color: rgba(54,241,205,0.35);
+  background: radial-gradient(circle at 10% 10%, rgba(54,241,205,0.2), rgba(4,6,20,0.6));
+}
+.blend-note {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin: 0;
+}
 
 .form .btn {
   justify-self: start;
@@ -268,7 +634,6 @@ select option:checked {
 }
 
 .recommend-btn {
-  padding-inline: 32px;
   gap: 10px;
   text-transform: uppercase;
   letter-spacing: 0.2em;

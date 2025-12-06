@@ -42,65 +42,154 @@
       <div class="panel recommend-panel">
         <header class="section-header">
           <div>
-            <p class="eyebrow">Link Prediction</p>
-            <h2>Get Recommendations</h2>
-            <p>Select a user and algorithm to fetch top movie suggestions from the sampled graph.</p>
+            <p class="eyebrow">Matrix Compare</p>
+            <h2>Stack Algorithms Side-by-Side</h2>
+            <p>Pick a user, choose a few heuristics, and see how each scorer ranks their next movies. Toggle the blend to average them.</p>
           </div>
         </header>
 
-        <form class="form" method="POST">
+        <form class="form compare-form" method="POST">
           <div class="form-group">
             <label for="user">User</label>
             <select id="user" name="user_id" required>
-              <option value="" disabled selected>Select user</option>
+              <option value="" disabled {% if not selected_user %}selected{% endif %}>Select user</option>
               {% for uid in users %}
               <option value="{{ uid }}" {% if selected_user == uid %}selected{% endif %}>User {{ uid }}</option>
               {% endfor %}
             </select>
           </div>
-          <div class="form-group">
-            <label for="algo">Algorithm</label>
-            <select id="algo" name="algorithm" required>
+
+          <div class="form-group algorithm-group">
+            <label>Algorithms</label>
+            {% set default_meta = {"tag": "Graph signal", "desc": "Heuristic score from the sampled graph."} %}
+            {% set algo_meta = {
+              "cosine": {"tag": "Collaborative", "desc": "Mean-centered item similarity that hunts for lookalike titles."},
+              "jaccard": {"tag": "Graph overlap", "desc": "Counts the shared viewers between rated and unseen movies."},
+              "adamic": {"tag": "Graph overlap", "desc": "Boosts rare overlaps by down-weighting heavy viewers."},
+              "resource": {"tag": "Graph flow", "desc": "Spreads influence through low-degree viewers for serendipity."},
+              "preferential": {"tag": "Link growth", "desc": "Favors movies with momentum plus shared-favorite mass."},
+              "pagerank": {"tag": "Global walk", "desc": "Random-walk ranking biased toward the selected user."}
+            } %}
+            <div class="algo-card-grid">
               {% for key, name in algorithms.items() %}
-              <option value="{{ key }}" {% if selected_algo == key %}selected{% endif %}>{{ name }}</option>
+              {% set meta = algo_meta.get(key, default_meta) %}
+              <label class="algo-card {% if key in selected_algorithms %}is-selected{% endif %}">
+                <input type="checkbox" name="algorithms" value="{{ key }}" {% if key in selected_algorithms %}checked{% endif %}>
+                <div class="algo-card-shell">
+                  <div class="algo-card-header">
+                    <span class="algo-tag">{{ meta.tag }}</span>
+                    <span class="algo-check" aria-hidden="true">✓</span>
+                  </div>
+                  <h4>{{ name }}</h4>
+                  <p>{{ meta.desc }}</p>
+                </div>
+              </label>
+              {% endfor %}
+            </div>
+            <p class="field-note">Pick up to four. Mixing collaborative cosine with graph heuristics shows where they disagree.</p>
+          </div>
+
+          <div class="form-group">
+            <label for="top_n">Top results per algorithm</label>
+            <select id="top_n" name="top_n">
+              {% for option in [8, 12, 16, 20, 24, 32] %}
+              <option value="{{ option }}" {% if top_n == option %}selected{% endif %}>Top {{ option }}</option>
               {% endfor %}
             </select>
+            <p class="field-note">Need broader recall? Push this higher (max 32). Smaller windows highlight the highest-confidence picks.</p>
           </div>
+
+          <div class="form-group blend-group">
+            <div class="blend-header">
+              <label for="blend-slider">Blend weight</label>
+              <label class="toggle">
+                <input type="checkbox" name="blend_enabled" value="1" {% if blend_enabled %}checked{% endif %} {% if not blend_summary.secondary_keys %}disabled{% endif %}>
+                <span>Enable blended column</span>
+              </label>
+            </div>
+            <input type="range" id="blend-slider" name="blend_weight" min="0" max="100" value="{{ blend_weight }}" {% if not blend_summary.secondary_keys %}disabled{% endif %} data-blend-slider>
+            <div class="blend-values" data-blend-values data-primary-label="{{ blend_summary.primary_label }}">
+              <span data-primary-share>{{ blend_summary.primary_label }} · {{ blend_summary.primary_share }}%</span>
+              <span data-secondary-share>Secondary mix · {{ blend_summary.secondary_share }}%</span>
+            </div>
+            <p class="field-note">Move the slider toward the algorithms on the right to give them more influence in the blended list.</p>
+          </div>
+
           <div class="form-actions">
             <button class="btn primary recommend-btn" type="submit">
-              <span>Get recommendations</span>
+              <span>Compare recommendations</span>
               <span aria-hidden="true" class="btn-glow">↗</span>
             </button>
           </div>
         </form>
       </div>
 
-      {% if results %}
+      {% if selected_user and algo_results %}
       <div class="panel recommend-panel recommend-results">
-        <div class="results-grid">
-          {% for rec in results %}
-          <div class="recommendation">
-            <p class="label">Score</p>
-            <p class="score">{{ rec.score }}</p>
-            <h4>{{ rec.title }}</h4>
+        <header class="section-header">
+          <div>
+            <p class="eyebrow">Comparison Table</p>
+            <h3>Top {{ top_n }} movies for User {{ selected_user }}</h3>
+            <p>Each column is a different algorithm. Use the action buttons under any column to explore its graph or score matrix.</p>
           </div>
+        </header>
+        <div class="compare-grid">
+          {% for key in selected_algorithms %}
+          {% set recs = algo_results.get(key, []) %}
+          <section class="algo-column">
+            <div class="algo-column-head">
+              <p class="algo-name">{{ algorithms.get(key, key) }}</p>
+              <p class="algo-meta">{{ recs|length }} results</p>
+            </div>
+            <div class="algo-cards">
+              {% for rec in recs %}
+              <article class="recommendation compact">
+                <div class="rec-score">
+                  <span class="score">{{ '%.3f'|format(rec.score) }}</span>
+                  <span class="label">score</span>
+                </div>
+                <h4>{{ rec.title }}</h4>
+              </article>
+              {% endfor %}
+            </div>
+            <div class="matrix-links">
+              <a class="btn secondary"
+                 href="/graph?mode=recommendations&user_id={{ selected_user }}&algorithm={{ key }}&top={{ top_n }}">
+                Graph view
+              </a>
+              <a class="btn ghost"
+                 href="/recommend/matrix?user_id={{ selected_user }}&algorithm={{ key }}&top={{ top_n }}">
+                Score matrix
+              </a>
+            </div>
+          </section>
           {% endfor %}
-        </div>
-        <div class="cta-group">
-          <a class="btn secondary"
-             href="/graph?mode=recommendations&user_id={{ selected_user }}&algorithm={{ selected_algo }}&top={{ top_n }}">
-            View graph for these recommendations
-          </a>
-          <a class="btn primary btns"
-             href="/recommend/matrix?user_id={{ selected_user }}&algorithm={{ selected_algo }}&top={{ top_n }}">
-            Adjacency matrix of recommendation scores
-          </a>
-          <a class="btn ghost" href="/graph">View full sample graph</a>
+
+          {% if blended_results %}
+          <section class="algo-column blend-column">
+            <div class="algo-column-head">
+              <p class="algo-name">Blended</p>
+              <p class="algo-meta">{{ blend_summary.primary_share }}% {{ blend_summary.primary_label }} · {{ blend_summary.secondary_share }}% others</p>
+            </div>
+            <div class="algo-cards">
+              {% for rec in blended_results %}
+              <article class="recommendation compact">
+                <div class="rec-score">
+                  <span class="score">{{ '%.3f'|format(rec.score) }}</span>
+                  <span class="label">blend</span>
+                </div>
+                <h4>{{ rec.title }}</h4>
+              </article>
+              {% endfor %}
+            </div>
+            <p class="blend-note">Blended lists summarize the weighted average so you can export your favorite mix.</p>
+          </section>
+          {% endif %}
         </div>
       </div>
       {% elif selected_user %}
       <div class="panel recommend-panel recommend-empty">
-        <p>No recommendations found for this user/algorithm.</p>
+        <p>No recommendations found for this user/algorithm mix.</p>
       </div>
       {% endif %}
     </div>
