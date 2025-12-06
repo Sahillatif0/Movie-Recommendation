@@ -1,3 +1,4 @@
+import math
 import random
 from pathlib import Path
 from typing import List, Tuple
@@ -92,7 +93,7 @@ class GraphRecommender:
                 color=attrs.get("color"),
                 title=attrs.get("title", attrs.get("label", node)),
                 shape="dot",
-                size=18 if attrs.get("bipartite") == "user" else 12,
+                size=58 if attrs.get("bipartite") == "user" else 12,
                 group=attrs.get("bipartite"),
             )
 
@@ -137,11 +138,18 @@ class GraphRecommender:
     def recommend_with_ids(
         self, user_id: int, algorithm: str = "cosine", top_n: int = 5
     ) -> List[Tuple[int, str, float]]:
+        algorithm = (algorithm or "cosine").lower()
+        if algorithm in {"jaccard", "adamic", "resource"}:
+            return self._recommend_similarity_sets(user_id, algorithm, top_n)
+        return self._recommend_collaborative(user_id, top_n)
+
+    def _recommend_collaborative(
+        self, user_id: int, top_n: int
+    ) -> List[Tuple[int, str, float]]:
         if user_id not in self.matrix.index:
             return []
 
         centered_matrix = self._mean_centered_matrix()
-        # Item-based collaborative filtering using cosine similarity between movie rating vectors.
         user_ratings = self.matrix.loc[user_id]
         rated = user_ratings[user_ratings > 0]
         if rated.empty:
@@ -171,6 +179,80 @@ class GraphRecommender:
         for movie_id, score in top:
             results.append((int(movie_id), self._movie_title(int(movie_id)), float(score)))
         return results
+
+    def _recommend_similarity_sets(
+        self, user_id: int, algorithm: str, top_n: int
+    ) -> List[Tuple[int, str, float]]:
+        if user_id not in self.matrix.index:
+            return []
+
+        user_ratings = self.matrix.loc[user_id]
+        rated = user_ratings[user_ratings > 0]
+        if rated.empty:
+            return []
+
+        candidates = user_ratings[user_ratings == 0].index
+        if candidates.empty:
+            return []
+
+        binary_matrix = (self.matrix > 0).astype(bool)
+        user_degrees = binary_matrix.sum(axis=1).to_dict()
+        watchers_cache = {}
+
+        def watchers(movie_id):
+            movie_id = int(movie_id)
+            if movie_id not in watchers_cache:
+                col = binary_matrix[movie_id]
+                watchers_cache[movie_id] = set(col[col].index)
+            return watchers_cache[movie_id]
+
+        scored = []
+        for movie_id in candidates:
+            candidate_watchers = watchers(movie_id)
+            score = 0.0
+            for seen_id, seen_rating in rated.items():
+                seen_watchers = watchers(seen_id)
+                intersection = candidate_watchers & seen_watchers
+                if not intersection:
+                    continue
+                if algorithm == "jaccard":
+                    union = candidate_watchers | seen_watchers
+                    sim = len(intersection) / len(union) if union else 0.0
+                elif algorithm == "adamic":
+                    sim = 0.0
+                    for user in intersection:
+                        deg = user_degrees.get(user, 0)
+                        if deg <= 1:
+                            continue
+                        sim += 1.0 / math.log(deg)
+                else:  # resource
+                    sim = 0.0
+                    for user in intersection:
+                        deg = user_degrees.get(user, 0)
+                        if deg == 0:
+                            continue
+                        sim += 1.0 / deg
+                if sim <= 0:
+                    continue
+                score += sim * float(seen_rating)
+            if score <= 0:
+                continue
+            scored.append((int(movie_id), self._movie_title(int(movie_id)), float(score)))
+
+        scored.sort(key=lambda x: x[2], reverse=True)
+        if not scored:
+            return []
+
+        max_score = max(item[2] for item in scored)
+        if max_score <= 0:
+            return scored[:top_n]
+
+        scale = 5.0 / max_score
+        normalized = []
+        for movie_id, title, score in scored[:top_n]:
+            capped = min(max(score * scale, 0.0), 5.0)
+            normalized.append((movie_id, title, float(capped)))
+        return normalized
 
     @staticmethod
     def _cosine_similarity(vec_a, vec_b) -> float:
@@ -206,7 +288,7 @@ class GraphRecommender:
             color="#3F8EFC",
             title=f"Recommendations for User {user_id}",
             shape="dot",
-            size=22,
+            size=52,
             group="user",
         )
 
@@ -227,7 +309,7 @@ class GraphRecommender:
                     title=f"{title} (score: {score:.4f})",
                     color="#34d399",
                     shape="dot",
-                    size=14,
+                    size=34,
                     group="recommendation",
                 )
                 net.add_edge(

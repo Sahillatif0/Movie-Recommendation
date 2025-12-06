@@ -1,17 +1,71 @@
-﻿document.addEventListener("DOMContentLoaded", () => {
+﻿const root = document.documentElement;
+root.classList.add("page-loading");
+window.addEventListener("load", () => {
+  root.classList.remove("page-loading");
+});
+
+document.addEventListener("DOMContentLoaded", () => {
+
   const links = document.querySelectorAll("a.btn, .nav-links a");
   const loading = createLoader();
 
   links.forEach((link) => {
     link.addEventListener("click", () => {
-      if (link.getAttribute("href")?.startsWith("#")) return;
+      const href = link.getAttribute("href");
+      if (href?.startsWith("#")) return;
+      
       loading.show();
-      setTimeout(() => loading.hide(), 1200);
+      
+      // For graph pages, keep loading visible until page fully loads
+      if (href?.includes("/graph")) {
+        // Don't auto-hide for graph pages - let the page hide it
+      } else {
+        setTimeout(() => loading.hide(), 1200);
+      }
     });
   });
 
   enhanceMatrixHover();
+  hideLoadingWhenGraphReady();
 });
+
+function hideLoadingWhenGraphReady() {
+  // Check if we're on a graph page
+  const graphContainer = document.getElementById('mynetwork');
+  if (!graphContainer) return;
+  
+  // Hide loading when page is fully loaded and graph is drawn
+  const hideLoading = () => {
+    const loader = document.querySelector(".loading");
+    if (loader) {
+      setTimeout(() => {
+        loader.style.display = "none";
+      }, 500);
+    }
+  };
+  
+  // Method 1: Listen for window load
+  if (document.readyState === 'complete') {
+    hideLoading();
+  } else {
+    window.addEventListener('load', hideLoading);
+  }
+  
+  // Method 2: Check for network object (PyVis creates this)
+  const checkNetwork = setInterval(() => {
+    if (typeof network !== 'undefined' && network) {
+      try {
+        network.on('stabilizationIterationsDone', hideLoading);
+        clearInterval(checkNetwork);
+      } catch (e) {
+        // Continue checking
+      }
+    }
+  }, 100);
+  
+  // Fallback: Force hide after 3 seconds
+  setTimeout(hideLoading, 3000);
+}
 
 function createLoader() {
   let el = document.querySelector(".loading");

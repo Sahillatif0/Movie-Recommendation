@@ -4,66 +4,94 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Graph-Based Movie Recommendation (ML-100K)</title>
+  <script>document.documentElement.classList.add('page-loading');</script>
   <link rel="stylesheet" href="/static/css/style.css" />
   <script defer src="/static/js/script.js"></script>
 </head>
 <body>
   <nav class="navbar">
-    <div class="logo">Graph-Based Recs</div>
+    <div class="nav-brand">
+      <div class="logo-mark">GR</div>
+      <div>
+        <p class="brand-title">Graph-Based Recs</p>
+        <p class="brand-subtitle">MOVIELENS 100K</p>
+      </div>
+    </div>
     <div class="nav-links">
       <a class="active" href="/">Home</a>
       <a href="/graph">Graph</a>
       <a href="/matrix">Matrix</a>
       <a href="/recommend">Recommend</a>
     </div>
+    <div class="nav-actions">
+      <span class="badge">v1.0 • LIVE</span>
+      <a class="btn secondary" href="/graph">Launch App</a>
+    </div>
   </nav>
 
-  <section class="hero">
-    <div class="hero-content">
-      <p class="eyebrow">MovieLens 100K</p>
-      <h1>Graph-Based Movie Recommendation System</h1>
-      <p class="lead">Explore relationships between users and movies using link prediction algorithms (Jaccard, Adamic/Adar, Resource Allocation).</p>
-      <div class="cta-group">
-        <a class="btn primary" href="/graph">Show Graph</a>
-        <a class="btn secondary" href="/matrix">Show Matrix</a>
-        <a class="btn tertiary" href="/recommend">Recommend Movies</a>
-      </div>
-      <div class="pill-row">
-        <span class="pill">Random 20 users per run</span>
-        <span class="pill">Interactive PyVis graph</span>
-        <span class="pill">Heatmap + Matrix</span>
-      </div>
+  <div class="page-wrapper" data-skeleton>
+    <div class="skeleton">
+      <div class="skeleton-line w-40"></div>
+      <div class="skeleton-line w-80"></div>
+      <div class="skeleton-line w-60"></div>
     </div>
-    <div class="hero-visual">
-      <div class="orb"></div>
-      <div class="card highlight">
-        <p class="label">Algorithms</p>
-        <ul>
-          {% for key, name in algorithms.items() %}
-          <li>{{ name }}</li>
-          {% endfor %}
-        </ul>
-      </div>
-      <div class="card muted">
-        <p class="label">Users in sample</p>
-        <p class="big-number">{{ users|length }}</p>
-      </div>
+    <div class="skeleton-grid">
+      <div class="skeleton-line w-80"></div>
+      <div class="skeleton-line w-70"></div>
+      <div class="skeleton-line w-50"></div>
     </div>
-  </section>
+  </div>
 
-  <section class="info-grid">
-    <div class="info-card">
-      <h3>Bipartite Graph</h3>
-      <p>Users and movies are connected through rating edges. Link prediction uncovers likely future ratings.</p>
+  <div data-skeleton-hide>
+    <div class="page-wrapper">
+      <section class="hero">
+        <div class="hero-content">
+          <p class="eyebrow">MovieLens 100K</p>
+          <h1>Graph-Based Movie Recommendation System</h1>
+          <p class="lead">Explore relationships between users and movies using link prediction algorithms (Jaccard, Adamic/Adar, Resource Allocation).</p>
+          <div class="cta-group">
+            <a class="btn primary" href="/graph">Show Graph</a>
+            <a class="btn secondary" href="/matrix">Show Matrix</a>
+            <a class="btn ghost" href="/recommend">Recommend Movies</a>
+          </div>
+          <div class="pill-row">
+            <span class="pill">Random 20 users per run</span>
+            <span class="pill">Interactive PyVis graph</span>
+            <span class="pill">Heatmap + Matrix</span>
+          </div>
+        </div>
+        <div class="hero-visual">
+          <div class="orb"></div>
+          <div class="card highlight">
+            <p class="label">Algorithms</p>
+            <ul class="algo-list">
+              {% for key, name in algorithms.items() %}
+              <li>{{ name }}</li>
+              {% endfor %}
+            </ul>
+          </div>
+          <div class="card muted">
+            <p class="label">Users in sample</p>
+            <p class="big-number">{{ users|length }}</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="info-grid">
+        <div class="panel">
+          <h3>Bipartite Graph</h3>
+          <p>Users and movies are connected through rating edges. Link prediction uncovers likely future ratings.</p>
+        </div>
+        <div class="panel">
+          <h3>Adjacency Matrix</h3>
+          <p>Pivoted user-movie ratings with a generated heatmap for quick visual inspection.</p>
+        </div>
+        <div class="panel">
+          <h3>Dynamic Sampling</h3>
+          <p>Every app run selects 20 random users so graphs, matrices, and recommendations stay fresh.</p>
+        </div>
+      </section>
     </div>
-    <div class="info-card">
-      <h3>Adjacency Matrix</h3>
-      <p>Pivoted user-movie ratings with a generated heatmap for quick visual inspection.</p>
-    </div>
-    <div class="info-card">
-      <h3>Dynamic Sampling</h3>
-      <p>Every app run selects 20 random users so graphs, matrices, and recommendations stay fresh.</p>
-    </div>
-  </section>
+  </div>
 </body>
 </html>

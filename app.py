@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 from flask import (
     Flask,
@@ -31,6 +32,10 @@ def _patch_graph_html(path: Path, lock_sample: bool):
     html = path.read_text(encoding="utf-8")
     lock_label = "Unlock sample" if lock_sample else "Lock sample"
     lock_toggle = "0" if lock_sample else "1"
+    
+    # Add script to load our custom JS
+    script_loader = '<script src="/static/js/script.js" defer></script>'
+    
     nav = (
         "<link rel=\"stylesheet\" href=\"/static/css/style.css\">"
         "<nav class=\"navbar\"><div class=\"logo\">Graph-Based Recs</div>"
@@ -82,8 +87,230 @@ def _patch_graph_html(path: Path, lock_sample: bool):
         "</script>"
     )
     html = html.replace("<body>", f"<body>{nav}")
-    html = html.replace("</body>", "</div></body>")
+    html = html.replace("</body>", f"{script_loader}</div></body>")
+    html = _modernize_loader_html(html)
     path.write_text(html, encoding="utf-8")
+
+
+def _modernize_loader_html(html: str) -> str:
+    if "graph-loader-panel" in html:
+        return html
+
+    legacy_css_patterns = [
+        r"\s*#loadingBar\s*\{[^}]*\}",
+        r"\s*#bar\s*\{[^}]*\}",
+        r"\s*#border\s*\{[^}]*\}",
+        r"\s*#text\s*\{[^}]*\}",
+        r"\s*div\.outerBorder\s*\{[^}]*\}",
+    ]
+    for pattern in legacy_css_patterns:
+        html = re.sub(pattern, "", html, count=1, flags=re.MULTILINE | re.DOTALL)
+
+    custom_css = """
+             .graph-card {
+                 position: relative;
+                 overflow: hidden;
+             }
+
+             #loadingBar {
+                 position: absolute;
+                 inset: 0;
+                 display: flex;
+                 align-items: center;
+                 justify-content: center;
+                 padding: 1.5rem;
+                 background: radial-gradient(circle at 20% 20%, rgba(99,102,241,0.15), transparent),
+                              radial-gradient(circle at 80% 0%, rgba(45,212,191,0.12), transparent),
+                              rgba(13,17,23,0.88);
+                 backdrop-filter: blur(8px);
+                 transition: opacity 0.4s ease;
+                 z-index: 12;
+             }
+
+             .graph-loader-panel {
+                 position: relative;
+                 width: min(420px, 90vw);
+                 border-radius: 22px;
+                 padding: 1.75rem;
+                 background: rgba(15,15,25,0.92);
+                 border: 1px solid rgba(148,163,184,0.25);
+                 box-shadow: 0 25px 80px rgba(15,23,42,0.65);
+                 color: #e2e8f0;
+                 z-index: 2;
+             }
+
+             .loader-kicker {
+                 font-size: 0.75rem;
+                 letter-spacing: 0.08em;
+                 text-transform: uppercase;
+                 color: #a5b4fc;
+                 margin: 0 0 0.35rem;
+             }
+
+             #loader-stage {
+                 font-size: 1.35rem;
+                 margin: 0 0 0.5rem;
+                 color: #f8fafc;
+             }
+
+             .loader-hint {
+                 margin: 0;
+                 color: #94a3b8;
+                 font-size: 0.9rem;
+             }
+
+             .loader-progress {
+                 width: 100%;
+                 height: 10px;
+                 border-radius: 999px;
+                 background: rgba(15,118,110,0.2);
+                 overflow: hidden;
+                 margin-top: 1.5rem;
+             }
+
+             #bar {
+                 width: 8%;
+                 height: 100%;
+                 border-radius: inherit;
+                 background: linear-gradient(90deg, #22d3ee, #818cf8);
+                 box-shadow: 0 0 25px rgba(129,140,248,0.6);
+                 transition: width 0.3s ease;
+             }
+
+             .loader-meta {
+                 display: flex;
+                 justify-content: space-between;
+                 align-items: center;
+                 margin-top: 0.85rem;
+                 font-size: 0.85rem;
+                 color: #94a3b8;
+             }
+
+             #text {
+                 font-weight: 700;
+                 font-size: 1rem;
+                 color: #f1f5f9;
+             }
+
+             #loader-tip {
+                 font-size: 0.85rem;
+                 color: #cbd5f5;
+             }
+
+             .loader-aurora {
+                 position: absolute;
+                 inset: -40% auto auto -20%;
+                 width: 220px;
+                 height: 220px;
+                 background: radial-gradient(circle, rgba(14,165,233,0.4), transparent 60%);
+                 filter: blur(8px);
+                 animation: pulse 4s ease-in-out infinite;
+                 z-index: 1;
+             }
+
+             @keyframes pulse {
+                 0% { opacity: 0.65; transform: scale(0.9); }
+                 50% { opacity: 1; transform: scale(1.05); }
+                 100% { opacity: 0.65; transform: scale(0.9); }
+             }
+    """
+
+    if "graph-card {" not in html:
+        html = html.replace("        </style>", f"{custom_css}\n        </style>", 1)
+
+    html = re.sub(r"\s*<div id=\"loadingBar\">[\s\S]*?</div>\s*", "\n", html, count=1)
+    html = re.sub(r"\s*<div class=\"outerBorder\">[\s\S]*?</div>\s*", "\n", html)
+    html = re.sub(r"\s*<div id=\"border\">[\s\S]*?</div>\s*", "\n", html)
+
+    html = html.replace('<div class="card" style="width: 100%">', '<div class="card graph-card" style="width: 100%">', 1)
+
+    loader_markup = """<div id=\"mynetwork\" class=\"card-body\"></div>
+            <div id=\"loadingBar\">
+              <div class=\"loader-aurora\"></div>
+              <div class=\"graph-loader-panel\">
+                <p class=\"loader-kicker\">Building graph sample</p>
+                <h3 id=\"loader-stage\">Initializing layout</h3>
+                <p class=\"loader-hint\">We stabilize the network so clusters stay readable once it renders.</p>
+                <div class=\"loader-progress\">
+                  <div id=\"bar\"></div>
+                </div>
+                <div class=\"loader-meta\">
+                  <span id=\"text\">0%</span>
+                  <span id=\"loader-tip\">Hang tight, this only takes a moment.</span>
+                </div>
+              </div>
+            </div>"""
+
+    html = html.replace('<div id="mynetwork" class="card-body"></div>', loader_markup, 1)
+
+    script_pattern = re.compile(
+        r"\n\s+network\.on\(\"stabilizationProgress\"[\s\S]*?network\.once\(\"stabilizationIterationsDone\"[\s\S]*?\}\);\s*",
+        re.MULTILINE,
+    )
+
+    new_script = """
+                  
+                      var loader = document.getElementById('loadingBar');
+                      var loaderBar = document.getElementById('bar');
+                      var loaderText = document.getElementById('text');
+                      var loaderStage = document.getElementById('loader-stage');
+                      var loaderTip = document.getElementById('loader-tip');
+                      var loaderStages = [
+                          { threshold: 0.2, stage: 'Collecting user nodes', tip: 'Sampling active viewers for this snapshot.' },
+                          { threshold: 0.45, stage: 'Linking shared favorites', tip: 'Connecting users who loved the same titles.' },
+                          { threshold: 0.75, stage: 'Untangling clusters', tip: 'Running physics to keep neighborhoods readable.' },
+                          { threshold: 1, stage: 'Adding neon glow', tip: 'Finalizing styles before rendering the network.' }
+                      ];
+
+                      function updateLoaderStage(progress) {
+                          if (!loaderStage || !loaderTip) {
+                              return;
+                          }
+                          for (var i = 0; i < loaderStages.length; i++) {
+                              if (progress <= loaderStages[i].threshold) {
+                                  loaderStage.textContent = loaderStages[i].stage;
+                                  loaderTip.textContent = loaderStages[i].tip;
+                                  return;
+                              }
+                          }
+                          var lastStage = loaderStages[loaderStages.length - 1];
+                          loaderStage.textContent = lastStage.stage;
+                          loaderTip.textContent = lastStage.tip;
+                      }
+
+                      network.on("stabilizationProgress", function(params) {
+                          if (loader) {
+                              loader.removeAttribute("style");
+                          }
+                          var widthFactor = params.iterations/params.total;
+                          var clamped = Math.max(0.06, Math.min(1, widthFactor));
+                          if (loaderBar) {
+                              loaderBar.style.width = (clamped * 100) + '%';
+                          }
+                          if (loaderText) {
+                              loaderText.innerHTML = Math.round(widthFactor*100) + '%';
+                          }
+                          updateLoaderStage(widthFactor);
+                      });
+                      network.once("stabilizationIterationsDone", function() {
+                          if (loaderText) {
+                              loaderText.innerHTML = '100%';
+                          }
+                          if (loaderBar) {
+                              loaderBar.style.width = '100%';
+                          }
+                          updateLoaderStage(1);
+                          if (loader) {
+                              loader.style.opacity = 0;
+                              // really clean the dom element
+                              setTimeout(function () {loader.style.display = 'none';}, 500);
+                          }
+                      });
+                  
+    """
+
+    html = script_pattern.sub(new_script, html, count=1)
+    return html
 
 
 @app.route("/")
