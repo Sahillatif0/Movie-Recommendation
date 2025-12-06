@@ -4,6 +4,9 @@ venv/
 env/
 .env
 
+.venv
+lab
+
 # IDE
 .vscode/
 .idea/
